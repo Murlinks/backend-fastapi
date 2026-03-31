@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: finance-assistant
+  labels:
+    name: finance-assistant
+    environment: production

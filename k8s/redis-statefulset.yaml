@@ -1,0 +1,126 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis-service
+  namespace: finance-assistant
+  labels:
+    app: redis
+spec:
+  ports:
+    - port: 6379
+      targetPort: 6379
+      name: redis
+  clusterIP: None
+  selector:
+    app: redis
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: redis
+  namespace: finance-assistant
+spec:
+  serviceName: redis-service
+  replicas: 1
+  selector:
+    matchLabels:
+      app: redis
+  template:
+    metadata:
+      labels:
+        app: redis
+    spec:
+      containers:
+      - name: redis
+        image: redis:7-alpine
+        ports:
+        - containerPort: 6379
+          name: redis
+        command:
+        - redis-server
+        - /etc/redis/redis.conf
+        - --requirepass
+        - $(REDIS_PASSWORD)
+        env:
+        - name: REDIS_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: redis-secrets
+              key: REDIS_PASSWORD
+        volumeMounts:
+        - name: redis-storage
+          mountPath: /data
+        - name: redis-config
+          mountPath: /etc/redis
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "1Gi"
+            cpu: "1000m"
+        livenessProbe:
+          exec:
+            command:
+            - redis-cli
+            - ping
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          exec:
+            command:
+            - redis-cli
+            - ping
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+      volumes:
+      - name: redis-config
+        configMap:
+          name: redis-config
+  volumeClaimTemplates:
+  - metadata:
+      name: redis-storage
+    spec:
+      accessModes: ["ReadWriteOnce"]
+      storageClassName: standard
+      resources:
+        requests:
+          storage: 5Gi
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: redis-config
+  namespace: finance-assistant
+data:
+  redis.conf: |
+    # 持久化配置
+    appendonly yes
+    appendfilename "appendonly.aof"
+    appendfsync everysec
+    
+    # RDB配置
+    save 900 1
+    save 300 10
+    save 60 10000
+    
+    # 内存管理
+    maxmemory 512mb
+    maxmemory-policy allkeys-lru
+    
+    # 网络配置
+    timeout 300
+    tcp-keepalive 60
+    
+    # 日志
+    loglevel notice
+    
+    # 性能优化
+    databases 16
+    stop-writes-on-bgsave-error yes
+    rdbcompression yes
+    rdbchecksum yes

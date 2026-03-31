@@ -1,0 +1,8 @@
+# Bandit security configuration
+[bandit]
+exclude_dirs = ['/tests', '/venv', '/.venv', '/env']
+tests = []
+skips = ['B101', 'B601']
+
+# B101: Test for use of assert (we use assert in tests)
+# B601: Paramiko calls (if we use SSH)
